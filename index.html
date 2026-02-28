@@ -1,43 +1,113 @@
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-  import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ryan 的雲端小遊戲</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; background-color: #f4f4f9; }
+        .box { border: 2px solid #ccc; padding: 20px; display: inline-block; border-radius: 10px; background: white; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; }
+        #score { font-size: 2em; color: #ff4757; }
+    </style>
+</head>
+<body>
 
-  // 🔴 這裡請替換成你在 Firebase 後台拿到的金鑰
-  const firebaseConfig = {
-    apiKey: "AIzaSyB9ntje6GrNaM5TrLskEvWRS7vQgdq8E7M",
-    authDomain: "ryanwebstore-7e037.firebaseapp.com",
-    projectId: "ryanwebstore-7e037",
-    storageBucket: "ryanwebstore-7e037.firebasestorage.app",
-    messagingSenderId: "975226757563",
-    appId: "1:975226757563:web:53d31832733c5541cba49e",
-    measurementId: "G-6B9M6EGYZC"
-  };
+    <div class="box">
+        <h2>點擊挑戰賽</h2>
+        <div id="auth-ui">
+            <button id="login-btn">Google 登入</button>
+        </div>
+        
+        <div id="game-ui" style="display:none;">
+            <p>歡迎, <span id="user-name">玩家</span>!</p>
+            <p id="score">0</p>
+            <button id="hit-btn">點我加分！</button>
+            <button id="save-btn" style="background-color: #2ecc71; color: white;">儲存進度</button>
+            <br><br>
+            <button id="logout-btn" style="font-size: 12px;">登出</button>
+        </div>
+    </div>
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
+    <script type="module">
+        // 載入 Firebase 模組
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
-  // 雲端儲存邏輯 (取代原本的 localStorage)
-  async function saveToCloud(price, category, compressedBase64) {
-    const time = new Date().toLocaleString();
-    const fileName = `images/${Date.now()}.jpg`;
-    const storageRef = ref(storage, fileName);
+        // 你提供的設定檔
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9ntje6GrNaM5TrLskEvWRS7vQgdq8E7M",
+            authDomain: "ryanwebstore-7e037.firebaseapp.com",
+            projectId: "ryanwebstore-7e037",
+            storageBucket: "ryanwebstore-7e037.firebasestorage.app",
+            messagingSenderId: "975226757563",
+            appId: "1:975226757563:web:69bc85b4ae45af9dcba49e",
+            measurementId: "G-8N54NJFMRB"
+        };
 
-    // 1. 上傳照片到 Storage
-    await uploadString(storageRef, compressedBase64, 'data_url');
-    const photoURL = await getDownloadURL(storageRef);
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth();
+        const db = getFirestore();
+        const provider = new GoogleAuthProvider();
 
-    // 2. 存文字資料到 Firestore
-    await addDoc(collection(db, "expenses"), {
-      price: parseFloat(price),
-      category: category,
-      photoURL: photoURL,
-      timestamp: new Date()
-    });
+        let score = 0;
+        let currentUser = null;
 
-    alert("同步成功！");
-    location.reload(); // 重新整理讀取最新資料
-  }
-</script>
+        // UI 元素
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const hitBtn = document.getElementById('hit-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const scoreText = document.getElementById('score');
+        const userNameText = document.getElementById('user-name');
 
+        // 監聽登入狀態
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('auth-ui').style.display = 'none';
+                document.getElementById('game-ui').style.display = 'block';
+                userNameText.innerText = user.displayName;
+
+                // --- 核心功能：從個人的 ID 讀取分數 ---
+                const docRef = doc(db, "users", user.uid); 
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    score = docSnap.data().score || 0;
+                    scoreText.innerText = score;
+                }
+            } else {
+                document.getElementById('auth-ui').style.display = 'block';
+                document.getElementById('game-ui').style.display = 'none';
+            }
+        });
+
+        // 登入/登出動作
+        loginBtn.onclick = () => signInWithPopup(auth, provider);
+        logoutBtn.onclick = () => signOut(auth).then(() => { score = 0; scoreText.innerText = 0; });
+
+        // 遊戲邏輯
+        hitBtn.onclick = () => {
+            score++;
+            scoreText.innerText = score;
+        };
+
+        // --- 核心功能：儲存到該使用者的專屬位置 ---
+        saveBtn.onclick = async () => {
+            if (currentUser) {
+                try {
+                    await setDoc(doc(db, "users", currentUser.uid), {
+                        score: score,
+                        lastUpdated: new Date()
+                    });
+                    alert("存檔成功！下次登入也會在喔。");
+                } catch (e) {
+                    console.error("存檔出錯：", e);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
