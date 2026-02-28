@@ -1,0 +1,43 @@
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+  import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+
+  // 🔴 這裡請替換成你在 Firebase 後台拿到的金鑰
+  const firebaseConfig = {
+    apiKey: "AIzaSyB9ntje6GrNaM5TrLskEvWRS7vQgdq8E7M",
+    authDomain: "ryanwebstore-7e037.firebaseapp.com",
+    projectId: "ryanwebstore-7e037",
+    storageBucket: "ryanwebstore-7e037.firebasestorage.app",
+    messagingSenderId: "975226757563",
+    appId: "1:975226757563:web:53d31832733c5541cba49e",
+    measurementId: "G-6B9M6EGYZC"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+
+  // 雲端儲存邏輯 (取代原本的 localStorage)
+  async function saveToCloud(price, category, compressedBase64) {
+    const time = new Date().toLocaleString();
+    const fileName = `images/${Date.now()}.jpg`;
+    const storageRef = ref(storage, fileName);
+
+    // 1. 上傳照片到 Storage
+    await uploadString(storageRef, compressedBase64, 'data_url');
+    const photoURL = await getDownloadURL(storageRef);
+
+    // 2. 存文字資料到 Firestore
+    await addDoc(collection(db, "expenses"), {
+      price: parseFloat(price),
+      category: category,
+      photoURL: photoURL,
+      timestamp: new Date()
+    });
+
+    alert("同步成功！");
+    location.reload(); // 重新整理讀取最新資料
+  }
+</script>
+
